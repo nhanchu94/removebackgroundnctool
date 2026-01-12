@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-const PHOTOROOM_ENDPOINT = 'https://sdk.photoroom.com/v1/edit';
+// PhotoRoom remove background endpoint
+const PHOTOROOM_ENDPOINT = 'https://sdk.photoroom.com/v1/segment';
 
 const parseBase64 = (dataUrl: string) => {
   const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
