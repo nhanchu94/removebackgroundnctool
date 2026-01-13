@@ -7,12 +7,13 @@ interface ApiKeyContextType {
   saveApiKeys: (keys: ApiKeys) => void;
   isGeminiKeySet: boolean;
   isPhotoRoomKeySet: boolean;
+  isSeedDreamKeySet: boolean;
 }
 
 const ApiKeyContext = createContext<ApiKeyContextType | undefined>(undefined);
 
 export const ApiKeyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [apiKeys, setApiKeys] = useState<ApiKeys>({ gemini: '', photoRoom: '' });
+  const [apiKeys, setApiKeys] = useState<ApiKeys>({ gemini: '', photoRoom: '', seedDream: '', seedDreamBaseUrl: '' });
 
   useEffect(() => {
     try {
@@ -20,8 +21,10 @@ export const ApiKeyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       if (storedKeys) {
         const parsed = JSON.parse(storedKeys);
         setApiKeys({
-            gemini: parsed.gemini || '',
-            photoRoom: parsed.photoRoom || '',
+          gemini: parsed.gemini || '',
+          photoRoom: parsed.photoRoom || '',
+          seedDream: parsed.seedDream || '',
+          seedDreamBaseUrl: parsed.seedDreamBaseUrl || '',
         });
       }
     } catch (error) {
@@ -40,9 +43,10 @@ export const ApiKeyProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   
   const isGeminiKeySet = !!apiKeys.gemini;
   const isPhotoRoomKeySet = !!apiKeys.photoRoom;
+  const isSeedDreamKeySet = !!apiKeys.seedDream;
 
   return (
-    <ApiKeyContext.Provider value={{ apiKeys, saveApiKeys, isGeminiKeySet, isPhotoRoomKeySet }}>
+    <ApiKeyContext.Provider value={{ apiKeys, saveApiKeys, isGeminiKeySet, isPhotoRoomKeySet, isSeedDreamKeySet }}>
       {children}
     </ApiKeyContext.Provider>
   );

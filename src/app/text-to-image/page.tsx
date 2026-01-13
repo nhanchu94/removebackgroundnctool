@@ -19,14 +19,19 @@ interface PromptEntry {
 
 const aspectRatios = ['1:1', '16:9', '3:2', '4:3', '3:4', '2:3', '4:5', '9:16'];
 const imageSizes = ['1K', '2K', '4K'];
+const modelOptions = [
+  { value: 'gemini', label: 'Gemini Image (mặc định)' },
+  { value: 'seed-dream-4.5', label: 'Seed Dream 4.5' },
+];
 
 export default function Page() {
   const [prompts, setPrompts] = useState<PromptEntry[]>([{ id: 1, prompt: '', count: 1 }]);
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [highQuality, setHighQuality] = useState(false);
   const [imageSize, setImageSize] = useState('1K');
+  const [model, setModel] = useState('gemini');
   const { addJobs, jobs } = useJobQueue();
-  const { isGeminiKeySet } = useApiKeys();
+  const { isGeminiKeySet, isSeedDreamKeySet } = useApiKeys();
   const [isLoading, setIsLoading] = useState(false);
 
   const textToImageJobs = jobs.filter(job => job.type === JobType.TEXT_TO_IMAGE);
@@ -48,7 +53,7 @@ export default function Page() {
   const handleGenerate = async () => {
     setIsLoading(true);
     
-    if (highQuality) {
+    if (model === 'gemini' && highQuality) {
         try {
             // @ts-ignore
             const hasKey = await window.aistudio.hasSelectedApiKey();
@@ -71,8 +76,9 @@ export default function Page() {
             payload: { 
                 prompt: p.prompt.trim(),
                 aspectRatio: aspectRatio,
-                highQuality: highQuality,
-                imageSize: highQuality ? imageSize : undefined,
+            highQuality: model === 'gemini' ? highQuality : undefined,
+            imageSize: model === 'gemini' && highQuality ? imageSize : undefined,
+            model,
             }
         }));
     });
@@ -85,7 +91,8 @@ export default function Page() {
     setIsLoading(false);
   };
   
-  const isGenerateDisabled = prompts.every(p => !p.prompt.trim() || p.count <= 0) || !isGeminiKeySet || isLoading;
+  const missingKey = model === 'seed-dream-4.5' ? !isSeedDreamKeySet : !isGeminiKeySet;
+  const isGenerateDisabled = prompts.every(p => !p.prompt.trim() || p.count <= 0) || missingKey || isLoading;
 
   return (
     <div>
@@ -159,6 +166,18 @@ export default function Page() {
                             ))}
                         </Select>
                     </div>
+                  <div className="w-48">
+                    <Select
+                      id="model-select"
+                      label="Model"
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                    >
+                      {modelOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </Select>
+                  </div>
                   <Button onClick={handleGenerate} disabled={isGenerateDisabled} isLoading={isLoading}>
                       Generate Images
                   </Button>

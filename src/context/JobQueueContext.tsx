@@ -3,6 +3,7 @@ import React, { createContext, useState, useEffect, useContext, ReactNode, useCa
 import { Job, JobStatus, JobType } from '../types';
 import { useApiKeys } from './ApiKeyContext';
 import { generateTextToImage, remixImage, generateVideo } from '../services/geminiService';
+import { generateSeedDreamImage, remixSeedDreamImage } from '../services/seedDreamService';
 import { removeBackground } from '../services/photoRoomService';
 
 interface JobQueueContextType {
@@ -56,18 +57,30 @@ export const JobQueueProvider: React.FC<{ children: ReactNode }> = ({ children }
       while (attempt < MAX_RETRIES && !success) {
         try {
           if (job.type === JobType.TEXT_TO_IMAGE && job.payload.prompt) {
-            const geminiKeys = apiKeys.gemini.split('\n').map(k => k.trim()).filter(Boolean);
-            if (geminiKeys.length === 0) throw new Error('Gemini API key is missing.');
-            const selectedKey = geminiKeys[geminiApiKeyIndex.current];
-            geminiApiKeyIndex.current = (geminiApiKeyIndex.current + 1) % geminiKeys.length;
-            result = await generateTextToImage(selectedKey, job.payload.prompt, job.payload.aspectRatio, job.payload.highQuality, job.payload.imageSize);
+            const model = job.payload.model || 'gemini';
+            if (model === 'seed-dream-4.5') {
+              if (!apiKeys.seedDream) throw new Error('Seed Dream API key is missing.');
+              result = await generateSeedDreamImage(apiKeys.seedDream, job.payload.prompt, job.payload.aspectRatio, apiKeys.seedDreamBaseUrl);
+            } else {
+              const geminiKeys = apiKeys.gemini.split('\n').map(k => k.trim()).filter(Boolean);
+              if (geminiKeys.length === 0) throw new Error('Gemini API key is missing.');
+              const selectedKey = geminiKeys[geminiApiKeyIndex.current];
+              geminiApiKeyIndex.current = (geminiApiKeyIndex.current + 1) % geminiKeys.length;
+              result = await generateTextToImage(selectedKey, job.payload.prompt, job.payload.aspectRatio, job.payload.highQuality, job.payload.imageSize);
+            }
 
           } else if (job.type === JobType.REMIX_IMAGE && job.payload.prompt && job.payload.imageData) {
-            const geminiKeys = apiKeys.gemini.split('\n').map(k => k.trim()).filter(Boolean);
-            if (geminiKeys.length === 0) throw new Error('Gemini API key is missing.');
-            const selectedKey = geminiKeys[geminiApiKeyIndex.current];
-            geminiApiKeyIndex.current = (geminiApiKeyIndex.current + 1) % geminiKeys.length;
-            result = await remixImage(selectedKey, job.payload.prompt, job.payload.imageData, job.payload.aspectRatio, job.payload.highQuality, job.payload.imageSize);
+            const model = job.payload.model || 'gemini';
+            if (model === 'seed-dream-4.5') {
+              if (!apiKeys.seedDream) throw new Error('Seed Dream API key is missing.');
+              result = await remixSeedDreamImage(apiKeys.seedDream, job.payload.prompt, job.payload.imageData, job.payload.aspectRatio, apiKeys.seedDreamBaseUrl);
+            } else {
+              const geminiKeys = apiKeys.gemini.split('\n').map(k => k.trim()).filter(Boolean);
+              if (geminiKeys.length === 0) throw new Error('Gemini API key is missing.');
+              const selectedKey = geminiKeys[geminiApiKeyIndex.current];
+              geminiApiKeyIndex.current = (geminiApiKeyIndex.current + 1) % geminiKeys.length;
+              result = await remixImage(selectedKey, job.payload.prompt, job.payload.imageData, job.payload.aspectRatio, job.payload.highQuality, job.payload.imageSize);
+            }
 
           } else if (job.type === JobType.REMOVE_BACKGROUND && job.payload.imageData) {
             if (!apiKeys.photoRoom) throw new Error('PhotoRoom API key is missing.');

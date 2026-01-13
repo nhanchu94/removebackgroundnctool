@@ -34,6 +34,7 @@ export interface Job {
     highQuality?: boolean;
     imageSize?: string;
     resolution?: string; // '720p' | '1080p'
+    model?: string; // e.g., 'gemini', 'seed-dream-4.5'
   };
   result?: string | null; // base64 image data URL or Blob URL for video
   error?: string | null;
@@ -43,4 +44,6 @@ export interface Job {
 export interface ApiKeys {
   gemini: string;
   photoRoom: string;
+  seedDream?: string;
+  seedDreamBaseUrl?: string;
 }
