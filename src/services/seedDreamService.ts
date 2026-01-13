@@ -20,7 +20,12 @@ export const generateSeedDreamImage = async (
     try {
       const err = await response.json();
       message = err.error || err.message || message;
-    } catch (e) {}
+    } catch (e) {
+      try {
+        const text = await response.text();
+        if (text) message = `${message}: ${text}`;
+      } catch (e2) {}
+    }
     throw new Error(message);
   }
 
