@@ -73,7 +73,7 @@ export const JobQueueProvider: React.FC<{ children: ReactNode }> = ({ children }
             const model = job.payload.model || 'gemini';
             if (model === 'seed-dream-4.5') {
               if (!apiKeys.seedDream) throw new Error('Seed Dream API key is missing.');
-              result = await remixSeedDreamImage(apiKeys.seedDream, job.payload.prompt, job.payload.imageData, job.payload.aspectRatio, apiKeys.seedDreamBaseUrl);
+              throw new Error('Seed Dream remix is not supported by this integration');
             } else {
               const geminiKeys = apiKeys.gemini.split('\n').map(k => k.trim()).filter(Boolean);
               if (geminiKeys.length === 0) throw new Error('Gemini API key is missing.');
