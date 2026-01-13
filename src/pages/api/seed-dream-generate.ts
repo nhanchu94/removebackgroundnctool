@@ -82,7 +82,8 @@ const pollForResult = async (
     }
 
     const data = await resp.json();
-    if (typeof data?.code === 'number' && data.code !== 200) {
+    const codeVal = typeof data?.code === 'string' ? parseInt(data.code, 10) : data?.code;
+    if (typeof codeVal === 'number' && codeVal !== 200) {
       const message = data.message || data.msg || 'Seed Dream polling error';
       throw new Error(message);
     }
@@ -148,12 +149,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       try {
         const err = await response.json();
         message = err.error || err.message || err.msg || message;
-      } catch (e) {}
+      } catch (e) {
+        try {
+          const text = await response.text();
+          if (text) message = `${message}: ${text}`;
+        } catch (e2) {}
+      }
       return res.status(response.status).json({ error: message });
     }
 
     const data = await response.json();
-    if (typeof data?.code === 'number' && data.code !== 200) {
+    const codeVal = typeof data?.code === 'string' ? parseInt(data.code, 10) : data?.code;
+    if (typeof codeVal === 'number' && codeVal !== 200) {
       const message = data.message || data.msg || 'Seed Dream error';
       return res.status(502).json({ error: message });
     }
@@ -174,6 +181,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(500).json({ error: 'Seed Dream: no image returned after polling' });
   } catch (error: any) {
+    console.error('Seed Dream handler error', error);
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }
 }
