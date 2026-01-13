@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-const DEFAULT_BASE_URL = 'https://ark.ap-southeast.bytepluses.com/api/v3';
+// Default to KIE Seedream API host
+const DEFAULT_BASE_URL = 'https://api.kie.ai/api/v1';
 
 const resolveBaseUrl = (baseUrl?: string) => {
   const trimmed = baseUrl?.trim();
@@ -24,13 +25,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Seed Dream API key is missing' });
     }
 
-    const url = `${resolveBaseUrl(baseUrl)}/images/generate`;
+    const url = `${resolveBaseUrl(baseUrl)}/jobs/createTask`;
     const payload = {
-      model: 'seedream-4-5-251128',
-      prompt: promptTrimmed,
-      size: aspectRatio === '16:9' ? '2K' : '1K',
-      response_format: 'b64_json',
-      watermark: false,
+      model: 'seedream/4.5-text-to-image',
+      input: {
+        prompt: promptTrimmed,
+        aspect_ratio: aspectRatio,
+        quality: 'basic',
+      },
     };
 
     const response = await fetch(url, {
@@ -52,13 +54,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const data = await response.json();
-    const base64 = data?.data?.[0]?.b64_json || data?.image;
-    if (!base64) {
-      return res.status(500).json({ error: 'Seed Dream: no image returned' });
-    }
-    const dataUrl = String(base64).startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
+    // Try to extract image result if synchronous; otherwise return job info
+    const output = data?.data?.output || data?.output;
+    const first = Array.isArray(output) ? output[0] : undefined;
+    const base64 = first?.b64_json || first?.base64 || data?.image;
+    const urlResult = first?.url || data?.url;
 
-    return res.status(200).json({ result: dataUrl });
+    if (base64) {
+      const dataUrl = String(base64).startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
+      return res.status(200).json({ result: dataUrl });
+    }
+
+    // If asynchronous job response, return job info to caller
+    return res.status(200).json({ job: data });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }

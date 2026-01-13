@@ -1,6 +1,5 @@
-// Seed Dream 4.5 image generation service with configurable base URL
-// Default to BytePlus ModelArk endpoint
-const defaultBaseUrl = 'https://ark.ap-southeast.bytepluses.com/api/v3';
+// Seed Dream 4.5 image generation service (via server proxy to avoid CORS)
+// Default base URL now handled server-side; client always calls the proxy.
 
 
 export const generateSeedDreamImage = async (
@@ -26,8 +25,9 @@ export const generateSeedDreamImage = async (
   }
 
   const data = await response.json();
-  if (!data?.result) throw new Error('Seed Dream: no image returned');
-  return data.result;
+  if (data?.result) return data.result;
+  if (data?.job) throw new Error('Seed Dream job created but no immediate image returned; async flow not implemented');
+  throw new Error('Seed Dream: no image returned');
 };
 
 // Currently unsupported without official remix endpoint; surface clear error
