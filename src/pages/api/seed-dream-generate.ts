@@ -9,6 +9,63 @@ const resolveBaseUrl = (baseUrl?: string) => {
   return trimmed.replace(/\/$/, '');
 };
 
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+const tryExtractImage = (data: any) => {
+  const output = data?.data?.output || data?.output;
+  const first = Array.isArray(output) ? output[0] : output;
+  const base64 = first?.b64_json || first?.base64 || first?.imageBase64 || data?.image;
+  const url = first?.url || data?.url;
+  if (base64) {
+    const dataUrl = String(base64).startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
+    return { dataUrl };
+  }
+  if (url) return { url };
+  return null;
+};
+
+const pollForResult = async (baseUrl: string, key: string, recordId: string, taskId?: string) => {
+  const url = `${baseUrl}/jobs/getResult`;
+  const MAX_POLLS = 10;
+  const INTERVAL_MS = 4000;
+
+  for (let i = 0; i < MAX_POLLS; i++) {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({ recordId, taskId }),
+    });
+
+    if (!resp.ok) {
+      let message = `Seed Dream poll error ${resp.status}`;
+      try {
+        const err = await resp.json();
+        message = err.error || err.message || message;
+      } catch (e) {}
+      throw new Error(message);
+    }
+
+    const data = await resp.json();
+    const extracted = tryExtractImage(data);
+    if (extracted?.dataUrl) return { result: extracted.dataUrl };
+    if (extracted?.url) return { url: extracted.url };
+
+    // check status if provided
+    const status = data?.data?.status || data?.status;
+    if (status === 'failed') {
+      const errMsg = data?.data?.error || data?.error || 'Seed Dream job failed';
+      throw new Error(errMsg);
+    }
+
+    await delay(INTERVAL_MS);
+  }
+
+  throw new Error('Seed Dream job created but no result after polling');
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
@@ -54,19 +111,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const data = await response.json();
-    // Try to extract image result if synchronous; otherwise return job info
-    const output = data?.data?.output || data?.output;
-    const first = Array.isArray(output) ? output[0] : undefined;
-    const base64 = first?.b64_json || first?.base64 || data?.image;
-    const urlResult = first?.url || data?.url;
+    const syncExtract = tryExtractImage(data);
+    if (syncExtract?.dataUrl) return res.status(200).json({ result: syncExtract.dataUrl });
+    if (syncExtract?.url) return res.status(200).json({ url: syncExtract.url });
 
-    if (base64) {
-      const dataUrl = String(base64).startsWith('data:') ? base64 : `data:image/png;base64,${base64}`;
-      return res.status(200).json({ result: dataUrl });
+    // Async job flow: require recordId/taskId to poll
+    const recordId = data?.data?.recordId || data?.recordId || data?.data?.taskId;
+    const taskId = data?.data?.taskId;
+    if (!recordId) {
+      return res.status(500).json({ error: 'Seed Dream: job created but no recordId returned' });
     }
 
-    // If asynchronous job response, return job info to caller
-    return res.status(200).json({ job: data });
+    const pollResult = await pollForResult(resolveBaseUrl(baseUrl), key, recordId, taskId);
+    if (pollResult.result) return res.status(200).json({ result: pollResult.result });
+    if (pollResult.url) return res.status(200).json({ url: pollResult.url });
+
+    return res.status(500).json({ error: 'Seed Dream: no image returned after polling' });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }

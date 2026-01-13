@@ -26,7 +26,8 @@ export const generateSeedDreamImage = async (
 
   const data = await response.json();
   if (data?.result) return data.result;
-  if (data?.job) throw new Error('Seed Dream job created but no immediate image returned; async flow not implemented');
+  if (data?.url) return data.url;
+  if (data?.error) throw new Error(data.error);
   throw new Error('Seed Dream: no image returned');
 };
 
