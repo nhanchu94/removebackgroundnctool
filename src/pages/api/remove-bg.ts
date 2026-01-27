@@ -60,3 +60,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: error?.message || 'Unexpected server error' });
   }
 }
+
+// Allow larger payloads so bigger images can be processed before hitting platform limits
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '100mb',
+    },
+  },
+};

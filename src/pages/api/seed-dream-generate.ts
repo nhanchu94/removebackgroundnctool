@@ -50,8 +50,8 @@ const pollForResult = async (
   key: string,
   ids: { taskId?: string; recordId?: string },
 ) => {
-  const MAX_POLLS = 10;
-  const INTERVAL_MS = 4000;
+  const MAX_POLLS = 20; // allow more retries for long-running tasks
+  const INTERVAL_MS = 5000; // wait longer between polls
   const endpoints = [
     { path: '/jobs/getResult', allowPost: true, allowGet: true },
     { path: '/jobs/getTaskResult', allowPost: true, allowGet: true },
