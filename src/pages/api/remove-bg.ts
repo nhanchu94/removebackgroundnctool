@@ -1,71 +1,76 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import https from 'https';
 
-// PhotoRoom remove background endpoint
-const PHOTOROOM_ENDPOINT = 'https://sdk.photoroom.com/v1/segment';
-
-const parseBase64 = (dataUrl: string) => {
-  const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
-  return {
-    mime: match?.[1] || 'image/png',
-    base64: match?.[2] || dataUrl,
-  };
-};
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  try {
-    const { imageBase64, apiKey } = req.body || {};
-    if (!imageBase64) {
-      return res.status(400).json({ error: 'imageBase64 is required' });
-    }
-
-    const key = apiKey || process.env.PHOTOROOM_API_KEY;
-    if (!key) {
-      return res.status(400).json({ error: 'PhotoRoom API key is missing' });
-    }
-
-    const { mime, base64 } = parseBase64(imageBase64);
-    const buffer = Buffer.from(base64, 'base64');
-    const formData = new FormData();
-    const blob = new Blob([buffer], { type: mime });
-    formData.append('image_file', blob, 'upload');
-
-    const response = await fetch(PHOTOROOM_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': key,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      let message = `PhotoRoom error ${response.status}`;
-      try {
-        const err = await response.json();
-        message = err.detail || message;
-      } catch (e) {}
-      return res.status(response.status).json({ error: message });
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const resultBase64 = Buffer.from(arrayBuffer).toString('base64');
-    const outMime = response.headers.get('content-type') || 'image/png';
-    const dataUrl = `data:${outMime};base64,${resultBase64}`;
-
-    return res.status(200).json({ result: dataUrl });
-  } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Unexpected server error' });
-  }
-}
-
-// Allow larger payloads so bigger images can be processed before hitting platform limits
 export const config = {
   api: {
-    bodyParser: {
-      sizeLimit: '100mb',
-    },
+    // Disable body parsing to handle large file streams directly
+    bodyParser: false,
+    externalResolver: true,
   },
 };
+
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  return new Promise<void>((resolve, reject) => {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method Not Allowed' });
+      return resolve();
+    }
+
+    const apiKey = (req.headers['x-api-key'] as string) || process.env.PHOTOROOM_API_KEY;
+
+    if (!apiKey) {
+      res.status(400).json({ error: 'PhotoRoom API key is missing' });
+      return resolve();
+    }
+
+    // Prepare headers for upstream forwarding
+    const headers: Record<string, string> = {
+       'X-Api-Key': apiKey,
+    };
+    
+    // Copy multipart content-type (critical specifically for boundary)
+    if (req.headers['content-type']) {
+        headers['Content-Type'] = req.headers['content-type'];
+    }
+    
+    // Copy content-length if present (often required by upstream)
+    if (req.headers['content-length']) {
+        headers['Content-Length'] = req.headers['content-length'];
+    }
+
+    const options = {
+      hostname: 'sdk.photoroom.com',
+      path: '/v1/segment',
+      method: 'POST',
+      headers: headers,
+    };
+
+    const proxyReq = https.request(options, (proxyRes) => {
+      // Forward status code
+      res.status(proxyRes.statusCode || 500);
+      
+      // Forward response headers (e.g. content-type image/png)
+      Object.entries(proxyRes.headers).forEach(([key, value]) => {
+          if (value) res.setHeader(key, value);
+      });
+
+      // Pipe the upstream response back to the client
+      proxyRes.pipe(res);
+      
+      proxyRes.on('end', () => resolve());
+    });
+
+    proxyReq.on('error', (err) => {
+      console.error('Proxy request error:', err);
+      if (!res.headersSent) {
+          res.status(502).json({ error: 'Failed to connect to PhotoRoom API via Proxy' });
+      }
+      resolve();
+    });
+
+    // Pipe the client incoming request stream (FormData) directly to upstream
+    // This avoids loading the whole body into memory, bypassing body size limits
+    req.pipe(proxyReq);
+  });
+}
+

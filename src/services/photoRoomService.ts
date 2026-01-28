@@ -1,4 +1,6 @@
 
+import { fileToBase64 } from '../util/fileUtils';
+
 // Helper function to convert a base64 data URL to a Blob
 const base64ToBlob = (dataUrl: string): Blob => {
   const parts = dataUrl.split(';base64,');
@@ -15,28 +17,41 @@ const base64ToBlob = (dataUrl: string): Blob => {
 };
 
 export const removeBackground = async (apiKey: string, imageBase64: string): Promise<string> => {
-  // Gọi qua Vercel Serverless Function Proxy (bắt buộc, không fallback trực tiếp để tránh CORS)
-  const vercelProxyResponse = await fetch('/api/remove-bg', {
+  
+  // Convert base64 straight to blob without compression
+  const blob = base64ToBlob(imageBase64);
+  const formData = new FormData();
+  formData.append('image_file', blob);
+
+  // Use Vercel Serverless Function as a streaming proxy (configured in src/pages/api/remove-bg.ts)
+  // This bypasses the default body parser limits by streaming the FormData
+  const response = await fetch('/api/remove-bg', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64, apiKey })
+    headers: {
+      'X-Api-Key': apiKey, // Send Key for the proxy to forward
+    },
+    body: formData, // Send as Multipart FormData
   });
 
-  if (!vercelProxyResponse.ok) {
-    let message = `Vercel Proxy error (${vercelProxyResponse.status})`;
+  if (!response.ok) {
+    let message = `PhotoRoom error (${response.status})`;
     try {
-      const errorData = await vercelProxyResponse.json();
-      message = errorData.error || message;
+      const errorData = await response.json();
+      message = errorData.detail || errorData.message || message;
     } catch (e) {
       // ignore parse error
     }
     throw new Error(message);
   }
 
-  const data = await vercelProxyResponse.json();
-  if (!data?.result) {
-    throw new Error('No result returned from remove-bg proxy');
-  }
-
-  return data.result;
+  // PhotoRoom returns the raw binary image
+  const responseBlob = await response.blob();
+  
+  // Convert response blob back to Base64 to display
+  return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(responseBlob);
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+  });
 };
