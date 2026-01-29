@@ -23,12 +23,13 @@ export const removeBackground = async (apiKey: string, imageBase64: string): Pro
   const formData = new FormData();
   formData.append('image_file', blob);
 
-  // Use Vercel Serverless Function as a streaming proxy (configured in src/pages/api/remove-bg.ts)
-  // This bypasses the default body parser limits by streaming the FormData
-  const response = await fetch('/api/remove-bg', {
+  // Use Vercel Rewrite Proxy (Edge Network) to bypass 4.5MB Serverless Function Body Limit
+  // The rewrite in next.config.ts maps /api/proxy-remove-bg -> https://sdk.photoroom.com/v1/segment
+  // This happens at the edge, before any serverless function limitation kicks in.
+  const response = await fetch('/api/proxy-remove-bg', {
     method: 'POST',
     headers: {
-      'X-Api-Key': apiKey, // Send Key for the proxy to forward
+      'X-Api-Key': apiKey, // Send Key directly (Proxy forwards it)
     },
     body: formData, // Send as Multipart FormData
   });
