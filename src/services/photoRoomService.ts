@@ -23,8 +23,8 @@ export const removeBackground = async (apiKey: string, imageBase64: string): Pro
   const formData = new FormData();
   formData.append('image_file', blob);
 
-  // Use Vercel Serverless Function as a streaming proxy (configured in src/pages/api/remove-bg.ts)
-  // This bypasses the default body parser limits by streaming the FormData
+  // Use Vercel Serverless Function as a streaming proxy
+  // If the file is > 4.5MB, Vercel will throw 413 Content Too Large.
   const response = await fetch('/api/remove-bg', {
     method: 'POST',
     headers: {
@@ -32,6 +32,40 @@ export const removeBackground = async (apiKey: string, imageBase64: string): Pro
     },
     body: formData, // Send as Multipart FormData
   });
+
+  if (response.status === 413) {
+      console.warn("Vercel Proxy Limit Exceeded (4.5MB). Switching to Direct API Upload.");
+      
+      // Fallback: Upload directly to PhotoRoom from Client
+      // Note: This requires the user to have a CORS extension enabled or PhotoRoom to allow the origin.
+      const directResponse = await fetch('https://sdk.photoroom.com/v1/segment', {
+          method: 'POST',
+          headers: {
+              'X-Api-Key': apiKey,
+          },
+          body: formData,
+      });
+
+      if (!directResponse.ok) {
+          let msg = `Direct Upload Error (${directResponse.status})`;
+          try {
+             // Check for CORS error or API error
+             const err = await directResponse.json();
+             msg = err.detail || msg;
+          } catch(e) {
+             msg += " (Possibly a CORS error. Ensure you have a CORS extension enabled for large files.)";
+          }
+          throw new Error(msg);
+      }
+      
+      const directBlob = await directResponse.blob();
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(directBlob);
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+  }
 
   if (!response.ok) {
     let message = `PhotoRoom error (${response.status})`;
