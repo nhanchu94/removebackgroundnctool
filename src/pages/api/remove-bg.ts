@@ -26,7 +26,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const headers: Record<string, string> = {
        'X-Api-Key': apiKey,
     };
-    
     // Copy multipart content-type (critical specifically for boundary)
     if (req.headers['content-type']) {
         headers['Content-Type'] = req.headers['content-type'];
