@@ -23,7 +23,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return resolve();
     }
 
-    // Prepare headers for upstream forwarding
     const headers: Record<string, string> = {
        'X-Api-Key': apiKey,
     };
